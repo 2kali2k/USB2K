@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -59,6 +61,7 @@ class VolumeRepository(
     /** Set while a plug/unplug storm is being processed. */
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+    private val refreshMutex = Mutex()
 
     val resolver: VolumeResolver = VolumeResolver { uri -> resolveRef(uri) }
 
@@ -137,12 +140,15 @@ class VolumeRepository(
     }
 
     suspend fun refresh() {
-        if (_refreshing.value) return
-        _refreshing.value = true
-        try {
-            _volumes.value = buildVolumes()
-        } finally {
-            _refreshing.value = false
+        // Serialize refreshes instead of dropping an attach/detach refresh that arrives while
+        // a slow USB enumeration is still running.
+        refreshMutex.withLock {
+            _refreshing.value = true
+            try {
+                _volumes.value = buildVolumes()
+            } finally {
+                _refreshing.value = false
+            }
         }
     }
 
@@ -255,7 +261,7 @@ class VolumeRepository(
             val rawRemovablePossible = when {
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.Q -> true
                 Build.VERSION.SDK_INT == Build.VERSION_CODES.Q -> Environment.isExternalStorageLegacy()
-                else -> Permissions.hasAllFilesAccess()
+                else -> false
             }
             val pathReadable = rawRemovablePossible && storageAccess &&
                 dirFile?.let { runCatching { it.listFiles() }.getOrNull() } != null

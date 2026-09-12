@@ -150,7 +150,14 @@ fun BrowseScreen(
                 query = ""
                 keyboard?.hide()
             }
-            state.breadcrumb.size >= 2 -> navigator.openParent(state.breadcrumb[state.breadcrumb.lastIndex - 1].uri)
+            state.breadcrumb.size >= 2 -> {
+                // The parent is already a destination in the normal folder flow. Pop it so its
+                // existing ViewModel and storage URI are restored instead of reloading a
+                // synthetic breadcrumb URI.
+                if (!navigator.back()) {
+                    navigator.openParent(state.breadcrumb[state.breadcrumb.lastIndex - 1].uri)
+                }
+            }
             else -> if (!navigator.back()) (context as? Activity)?.finish()
         }
     }

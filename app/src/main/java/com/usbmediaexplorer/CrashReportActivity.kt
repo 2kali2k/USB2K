@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.usbmediaexplorer.R
 import com.usbmediaexplorer.ui.theme.UsbMediaExplorerTheme
 import java.io.File
 
@@ -64,7 +66,7 @@ class CrashReportActivity : ComponentActivity() {
                     onCopy = {
                         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("crash report", trace))
-                        Toast.makeText(this, "تم نسخ التقرير", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.crash_report_copied), Toast.LENGTH_SHORT).show()
                     },
                     onClose = { finishAffinity() },
                 )
@@ -104,19 +106,19 @@ private fun CrashReportScreen(
                 .fillMaxSize()
                 .padding(16.dp),
         ) {
-            Text("تعطّل التطبيق", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.crash_report_title), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(4.dp))
             Text(
-                "التقرير أدناه يوضح سبب التعطل بدقة. انسخه أو شاركه حتى يمكن إصلاح المشكلة.",
+                stringResource(R.string.crash_report_body),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(12.dp))
             Row {
-                Button(onClick = onShare) { Text("مشاركة") }
+                Button(onClick = onShare) { Text(stringResource(R.string.crash_report_share)) }
                 Spacer(Modifier.width(8.dp))
-                OutlinedButton(onClick = onCopy) { Text("نسخ") }
+                OutlinedButton(onClick = onCopy) { Text(stringResource(R.string.crash_report_copy)) }
                 Spacer(Modifier.width(8.dp))
-                TextButton(onClick = onClose) { Text("إغلاق") }
+                TextButton(onClick = onClose) { Text(stringResource(R.string.crash_report_close)) }
             }
             Spacer(Modifier.height(12.dp))
             SelectionContainer(

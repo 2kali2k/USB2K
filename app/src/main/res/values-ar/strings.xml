@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">مستكشف وسائط USB</string>
+    <string name="crash_report_title">تعطّل التطبيق</string>
+    <string name="crash_report_body">يوضح التقرير أدناه سبب التعطل. انسخه أو شاركه للمساعدة في إصلاح المشكلة.</string>
+    <string name="crash_report_share">مشاركة</string>
+    <string name="crash_report_copy">نسخ</string>
+    <string name="crash_report_close">إغلاق</string>
+    <string name="crash_report_copied">تم نسخ التقرير</string>
 
     <!-- إجراءات عامة -->
     <string name="action_open">فتح</string>

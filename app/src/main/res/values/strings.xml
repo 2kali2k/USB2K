@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">USB Media Explorer</string>
+    <string name="crash_report_title">App crashed</string>
+    <string name="crash_report_body">The report below explains the crash. Copy or share it to help fix the problem.</string>
+    <string name="crash_report_share">Share</string>
+    <string name="crash_report_copy">Copy</string>
+    <string name="crash_report_close">Close</string>
+    <string name="crash_report_copied">Report copied</string>
 
     <!-- Common actions -->
     <string name="action_open">Open</string>

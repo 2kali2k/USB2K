@@ -3,23 +3,16 @@ package com.usbmediaexplorer.util
 import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import android.os.Environment
-import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 /**
  * Runtime-permission helpers.
  *
- * Two routes unlock storage: the ordinary runtime permission (media on 13+, storage on older
- * versions — on legacy Android this covers removable mounts too), and the special all-files
- * access on Android 11+ ([hasAllFilesAccess]), which is the only way raw paths keep working for
- * non-media files there. Where neither route applies, a single SAF tree grant per removable
- * volume remains the fallback.
+ * Storage is unlocked through ordinary runtime media/storage permission or a SAF tree grant per
+ * removable volume. The app deliberately does not request broad all-files access.
  */
 object Permissions {
 
@@ -55,29 +48,8 @@ object Permissions {
         return list.toTypedArray()
     }
 
-    /** Android 11+ only: the special "All files access" app-op exists there and nowhere else. */
-    fun supportsAllFilesAccess(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-
-    /**
-     * True when the user toggled "Allow access to manage all files" for this app. The only route
-     * that makes raw paths work for every file (documents, archives, non-media) on Android 11+,
-     * internal and removable alike.
-     */
-    fun hasAllFilesAccess(): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
-
-    /**
-     * Combined gate: "can the app read the drives" — via all-files access (11+) or via the
-     * ordinary media/storage permission. Callers should not care which route granted it.
-     */
-    fun hasStorageAccess(context: Context): Boolean =
-        hasAllFilesAccess() || hasMediaAccess(context)
-
-    /** The system screen where all-files access is toggled. Callers guard with [supportsAllFilesAccess]. */
-    fun allFilesAccessIntent(packageName: String): Intent = Intent(
-        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-        Uri.parse("package:$packageName"),
-    )
+    /** Combined gate for the runtime media/storage permission route. */
+    fun hasStorageAccess(context: Context): Boolean = hasMediaAccess(context)
 
     private fun granted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
@@ -106,13 +78,22 @@ object Permissions {
         else -> granted(context, Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 
+    private fun requiredMediaPermissions(): List<String> = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
+            Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.READ_MEDIA_IMAGES,
+        )
+        else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
     /**
      * True when a media permission is denied *and* Android will no longer show a dialog for it
      * (the user picked "Don't ask again"). Only meaningful right after a request result — before
      * any request the rationale flag is false as well.
      */
     fun permanentlyDenied(activity: Activity): Boolean =
-        missingMediaPermissions(activity).any { permission ->
+        requiredMediaPermissions().any { permission ->
+            ContextCompat.checkSelfPermission(activity, permission) != PackageManager.PERMISSION_GRANTED &&
             !ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
         }
 

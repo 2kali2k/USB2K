@@ -230,11 +230,13 @@ fun PlayerScreen(uri: String, folderUri: String) {
                 ) { change, dragAmount ->
                     change.consume()
                     totalDrag += dragAmount
-                    val value = (
-                        baseValue - totalDrag / size.height.coerceAtLeast(1).toFloat() *
-                            VERTICAL_GESTURE_SENSITIVITY
-                        )
-                        .coerceIn(0f, 1f)
+                    val value = scaledGestureValue(
+                        baseValue = baseValue,
+                        dragPixels = totalDrag,
+                        extentPixels = size.height.toFloat(),
+                        sensitivity = VERTICAL_GESTURE_SENSITIVITY,
+                        thresholdPixels = GESTURE_THRESHOLD_PX,
+                    ) ?: return@detectVerticalDragGestures
                     if (rightSide) setVolumeFraction(context, value) else setBrightness(context, value)
                     gestureFeedback = GestureFeedback(
                         kind = if (rightSide) GestureFeedbackKind.VOLUME else GestureFeedbackKind.BRIGHTNESS,
@@ -245,6 +247,7 @@ fun PlayerScreen(uri: String, folderUri: String) {
             .pointerInput(state.locked, state.durationMs) {
                 if (state.locked) return@pointerInput
                 var scrubStart = 0L
+                var totalDrag = 0f
                 detectHorizontalDragGestures(
                     onDragEnd = {
                         if (scrubbing) {
@@ -262,16 +265,21 @@ fun PlayerScreen(uri: String, folderUri: String) {
                     if (state.durationMs <= 0) return@detectHorizontalDragGestures
                     if (!scrubbing) {
                         scrubbing = true
+                        totalDrag = 0f
                         // Read, not collected: the drag start needs the current position once,
                         // and collecting it here would recompose the surface on every tick.
                         scrubPosition = viewModel.position.value.toFloat()
                         scrubStart = scrubPosition.toLong()
                         viewModel.setControlsVisible(true)
                     }
-                    // Right means rewind and left means forward, matching the user's finger.
-                    val delta = -dragAmount / size.width.coerceAtLeast(1).toFloat() *
-                        state.durationMs * HORIZONTAL_GESTURE_SENSITIVITY
-                    scrubPosition = (scrubPosition + delta).coerceIn(0f, state.durationMs.toFloat())
+                    totalDrag += dragAmount
+                    scrubPosition = seekPositionFromDrag(
+                        startPositionMs = scrubStart,
+                        dragPixels = totalDrag,
+                        widthPixels = size.width.toFloat(),
+                        durationMs = state.durationMs,
+                        sensitivity = HORIZONTAL_GESTURE_SENSITIVITY,
+                    ).toFloat()
                     gestureFeedback = GestureFeedback(
                         kind = GestureFeedbackKind.SEEK,
                         value = scrubPosition,
@@ -555,8 +563,9 @@ private fun readVolumeFraction(context: Context): Float {
 }
 
 private const val SEEK_STEP_MS = 10_000L
-private const val HORIZONTAL_GESTURE_SENSITIVITY = 0.45f
-private const val VERTICAL_GESTURE_SENSITIVITY = 0.45f
+private const val HORIZONTAL_GESTURE_SENSITIVITY = 0.35f
+private const val VERTICAL_GESTURE_SENSITIVITY = 0.30f
+private const val GESTURE_THRESHOLD_PX = 8f
 
 private fun setVolumeFraction(context: Context, fraction: Float) {
     val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return

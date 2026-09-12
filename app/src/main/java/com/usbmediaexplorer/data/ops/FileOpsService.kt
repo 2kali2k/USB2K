@@ -58,10 +58,10 @@ class FileOpsService : Service() {
                 }
             }
         }
-        // START_STICKY: if the OS kills the process mid-operation, the service (and with it the
-        // foreground notification and the recovery path in FileOpsManager) comes back instead of
-        // silently abandoning the job (audit item: ops not persisted / NOT_STICKY).
-        return START_STICKY
+        // Jobs live in FileOpsManager memory and cannot be resumed by a restarted service. The
+        // journal is recovered when the application starts, so a sticky empty service would only
+        // recreate a misleading notification before stopping.
+        return START_NOT_STICKY
     }
 
     private fun promoteToForeground(ops: FileOpsManager) {

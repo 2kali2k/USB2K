@@ -494,12 +494,12 @@ class PlayerViewModel(
         }
     }
 
-    private fun persistPosition() {
+    private fun persistPosition(targetScope: kotlinx.coroutines.CoroutineScope = viewModelScope) {
         val node = _state.value.node ?: return
         val position = player.currentPosition
         val duration = player.duration.let { if (it == C.TIME_UNSET) 0L else it }
         if (position <= 0 || duration <= 0) return
-        viewModelScope.launch {
+        targetScope.launch {
             container.playbackPositionStore.save(
                 PlaybackPosition(
                     key = node.stableKey,
@@ -512,7 +512,9 @@ class PlayerViewModel(
     }
 
     override fun onCleared() {
-        persistPosition()
+        // ViewModel scope may already be cancelled during teardown; the application scope keeps
+        // the final bookmark save alive while the player is being released.
+        persistPosition(container.appScope)
         player.release()
         super.onCleared()
     }
