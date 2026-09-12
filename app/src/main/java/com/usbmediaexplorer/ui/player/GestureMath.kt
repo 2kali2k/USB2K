@@ -18,6 +18,7 @@ internal fun seekPositionFromDrag(
     widthPixels: Float,
     durationMs: Long,
     sensitivity: Float,
-): Long = (startPositionMs + dragPixels / widthPixels.coerceAtLeast(1f) * durationMs * sensitivity)
-    .coerceIn(0L, durationMs)
+): Long = (startPositionMs.toFloat() +
+    dragPixels / widthPixels.coerceAtLeast(1f) * durationMs.toFloat() * sensitivity)
+    .coerceIn(0f, durationMs.toFloat())
     .toLong()

@@ -2,6 +2,7 @@ package com.usbmediaexplorer.ui.player
 
 import android.app.Activity
 import android.content.Context
+            }
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.media.AudioManager
