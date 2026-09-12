@@ -242,7 +242,7 @@ fun PlayerScreen(uri: String, folderUri: String) {
                         kind = if (rightSide) GestureFeedbackKind.VOLUME else GestureFeedbackKind.BRIGHTNESS,
                         value = value,
                     )
-                )
+                }
             }
             .pointerInput(state.locked, state.durationMs) {
                 if (state.locked) return@pointerInput
