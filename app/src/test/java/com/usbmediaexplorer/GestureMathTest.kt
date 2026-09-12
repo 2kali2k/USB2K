@@ -18,7 +18,12 @@ class GestureMathTest {
     }
 
     @Test
-    fun `right drag moves seek forward`() {
-        assertEquals(13_500L, seekPositionFromDrag(10_000L, 350f, 1000f, 20_000L, 0.5f))
+    fun `right drag moves seek backward`() {
+        assertEquals(6_500L, seekPositionFromDrag(10_000L, 350f, 1000f, 20_000L, 0.5f))
+    }
+
+    @Test
+    fun `left drag moves seek forward`() {
+        assertEquals(13_500L, seekPositionFromDrag(10_000L, -350f, 1000f, 20_000L, 0.5f))
     }
 }

@@ -12,6 +12,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -58,6 +59,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -70,6 +72,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -721,15 +724,39 @@ private fun PlayerControls(
                     color = Color.White,
                     style = MaterialTheme.typography.labelSmall,
                 )
-                Slider(
-                    value = if (scrubbing) scrubPosition else positionMs.toFloat(),
-                    onValueChange = onScrubChange,
-                    onValueChangeFinished = { onScrubEnd(if (scrubbing) scrubPosition else positionMs.toFloat()) },
-                    valueRange = 0f..state.durationMs.coerceAtLeast(1L).toFloat(),
+                val sliderValue = if (scrubbing) scrubPosition else positionMs.toFloat()
+                val duration = state.durationMs.coerceAtLeast(1L).toFloat()
+                Box(
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 10.dp),
-                )
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Canvas(Modifier.fillMaxWidth().height(2.dp)) {
+                        val fraction = (sliderValue / duration).coerceIn(0f, 1f)
+                        val radius = CornerRadius(size.height / 2f)
+                        drawRoundRect(
+                            color = Color.White.copy(alpha = 0.35f),
+                            cornerRadius = radius,
+                        )
+                        drawRoundRect(
+                            color = Color.White,
+                            size = size.copy(width = size.width * fraction),
+                            cornerRadius = radius,
+                        )
+                    }
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = onScrubChange,
+                        onValueChangeFinished = { onScrubEnd(if (scrubbing) scrubPosition else positionMs.toFloat()) },
+                        valueRange = 0f..duration,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(
+                            activeTrackColor = Color.Transparent,
+                            inactiveTrackColor = Color.Transparent,
+                        ),
+                    )
+                }
                 Text(
                     text = Formatters.duration(state.durationMs),
                     color = Color.White,

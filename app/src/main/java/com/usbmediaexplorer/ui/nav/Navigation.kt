@@ -105,7 +105,6 @@ class AppNavigator(private val navController: NavHostController) {
 
     private fun navigateFolder(route: String) {
         navController.navigate(route) {
-            launchSingleTop = true
             restoreState = true
         }
     }
