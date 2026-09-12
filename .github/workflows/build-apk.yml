@@ -191,7 +191,7 @@ jobs:
       # Prove the APK is really signed by the rotated key before anything publishes it,
       # and leave the certificate fingerprints in the log for rotation audits (REL-02).
       - name: Verify release signature (apksigner)
-        if: steps.release_build.outputs.exit_code == '0'
+        if: steps.signing.outputs.has_signing == 'true' && steps.release_build.outputs.exit_code == '0'
         run: |
           set -o pipefail
           APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)"
@@ -203,7 +203,7 @@ jobs:
             app/build/outputs/apk/release/app-release.apk 2>&1 | tee apksigner.log
 
       - name: Upload release APK
-        if: steps.release_build.outputs.exit_code == '0'
+        if: steps.signing.outputs.has_signing == 'true' && steps.release_build.outputs.exit_code == '0'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.0
         with:
           name: USB-Media-Explorer-release-apk
@@ -214,7 +214,7 @@ jobs:
       # الأصول القديمة (غير الموقّعة، ونسخ debug المنشورة سابقًا) تُحذف من الـRelease حتى
       # يبقى ملف واحد موقّع هو التسليم الرسمي.
       - name: Remove legacy release assets
-        if: steps.release_build.outputs.exit_code == '0'
+        if: steps.signing.outputs.has_signing == 'true' && steps.release_build.outputs.exit_code == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -224,7 +224,7 @@ jobs:
       # ينشر الـAPK في Release ثابت اسمه apk-latest حتى يبقى رابط التنزيل واحدًا
       # ولا يحتاج المستخدم للدخول إلى سجل تشغيل Actions في كل مرة.
       - name: Publish APK to the apk-latest release
-        if: steps.release_build.outputs.exit_code == '0'
+        if: steps.signing.outputs.has_signing == 'true' && steps.release_build.outputs.exit_code == '0'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v2.3.0
         with:
           tag_name: apk-latest
@@ -250,7 +250,7 @@ jobs:
           fail_on_unmatched_files: true
 
       - name: Publish GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v') && steps.release_build.outputs.exit_code == '0'
+        if: startsWith(github.ref, 'refs/tags/v') && steps.signing.outputs.has_signing == 'true' && steps.release_build.outputs.exit_code == '0'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v2.3.0
         with:
           files: app/build/outputs/apk/release/app-release.apk
