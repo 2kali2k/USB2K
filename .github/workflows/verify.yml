@@ -1,0 +1,153 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    # main: the merge gate. arena/**: the working branches this repo is developed on.
+    # Without the arena/** trigger a pushed branch runs *no* CI at all, so a red
+    # instrumented-smoke job could only ever be diagnosed by opening a PR first.
+    branches: [ main, "arena/**" ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+      - name: Set up JDK 17
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v5.0.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - name: Verify wrapper
+        run: ./gradlew --version
+      - name: Unit tests
+        id: unit_tests
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --no-daemon --console=plain --stacktrace 2>&1 | tee unit-tests.log
+      # Failure triage without opening the raw log: the error excerpt lands in the run
+      # summary AND as a check annotation (visible via the Checks API). The job still
+      # fails because the Unit tests step above failed.
+      - name: Report unit-test failure cause
+        if: failure() && steps.unit_tests.conclusion == 'failure'
+        run: python3 .github/workflows/report_failure.py unit-tests.log "Unit-test"
+      - name: Lint
+        id: lint
+        run: |
+          set -o pipefail
+          ./gradlew :app:lintDebug --no-daemon --console=plain --stacktrace 2>&1 | tee lint.log
+      - name: Report lint failure cause
+        if: failure() && steps.lint.conclusion == 'failure'
+        run: python3 .github/workflows/report_failure.py lint.log "Lint"
+      - name: Debug build
+        id: debug_build
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleDebug --no-daemon --console=plain --stacktrace 2>&1 | tee build.log
+      - name: Report build failure cause
+        if: failure() && steps.debug_build.conclusion == 'failure'
+        run: python3 .github/workflows/report_failure.py build.log "Debug-build"
+
+  instrumented-smoke:
+    name: Instrumented smoke (API ${{ matrix.api-level }})
+    runs-on: ubuntu-latest
+    # 60, not 45: a software-emulated API 35 boot alone can eat 20+ minutes on a runner
+    # without /dev/kvm (run 34651240282: "Timeout waiting for emulator to boot" at 600 s).
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # API 29 keeps google_apis — proven green (run 34653605619, `SMOKE gradle_exit=0`).
+        # API 35 moves to the AOSP image with more cores/RAM: on google_apis its
+        # system_server died under software emulation — the triage of that same run shows
+        # `DeadSystemException: The system died` in com.google.android.apps.nexuslauncher,
+        # com.android.phone, com.android.bluetooth and permissioncontroller, with no crash
+        # from our own package at all. The smoke test needs no Google APIs, so the lighter
+        # image removes exactly the processes that were starving the system.
+        include:
+          - api-level: 29
+            target: google_apis
+            cores: 2
+            ram-size: 2048M
+          - api-level: 35
+            target: default
+            cores: 4
+            ram-size: 4096M
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+      - name: Set up JDK 17
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v5.0.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Same pin as build-apk.yml (VRF-02): one SHA per action across the repo, and the
+      # comment must name the release that SHA actually is. Proven green on the `verify`
+      # job by run 34373598827 (dependabot PR #15).
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Run instrumented tests on emulator
+        # Pinned to the commit behind the `v2` tag (= release v2.38.0) instead of the
+        # floating tag, matching the SHA-pinning policy of every other action (VRF-01).
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2 (release v2.38.0)
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: ${{ matrix.target }}
+          cores: ${{ matrix.cores }}
+          ram-size: ${{ matrix.ram-size }}
+          # Default is 600 s, which API 35 exceeds without KVM. Raise it instead of
+          # silently dropping the newer API from the matrix.
+          emulator-boot-timeout: 1800
+          # Makes the action chdir() itself, so relative paths in the script hold even
+          # though the script also cds defensively.
+          working-directory: ${{ github.workspace }}
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          # ROOT CAUSE of the long-standing smoke failure (read from the pinned action's
+          # src/main.ts + src/script-parser.ts): the action splits `script` on EVERY newline
+          # and runs each line as its own `sh -c`, so variables never survive to the next
+          # line and a multi-line `if … then … fi` block dies as a syntax error — the job
+          # reported "exit code 2" without Gradle's real status or any triage ever running.
+          # Therefore the whole flow must be ONE line: the YAML folded scalar (`>-`) joins
+          # these physical lines with spaces into a single value, which the action then runs
+          # as one `sh -c` that hands a self-contained program to bash. `cd` first because
+          # the action only chdir()s when `working-directory` is set.
+          script: >-
+            bash -c 'cd "${GITHUB_WORKSPACE}" || exit 9;
+            echo "::notice::SMOKE start $(pwd) API ${{ matrix.api-level }}";
+            ./gradlew :app:connectedDebugAndroidTest --no-daemon --console=plain --stacktrace 2>&1 | tee connected.log;
+            code=${PIPESTATUS[0]};
+            echo "::notice::SMOKE gradle_exit=$code";
+            if [ "$code" -ne 0 ]; then
+            sh .github/workflows/smoke_evidence.sh smoke-evidence "Smoke(API ${{ matrix.api-level }})" connected.log || true;
+            fi;
+            exit $code'
+
+      # The raw job log sits on a host a sandboxed reviewer cannot reach, and the Gradle
+      # error only says "There were failing tests". This artifact is what makes an
+      # emulator failure diagnosable afterwards: device logcat + crash buffer + install
+      # and instrumentation state + the connected-test reports.
+      - name: Upload smoke failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.0
+        with:
+          name: smoke-api-${{ matrix.api-level }}-evidence
+          path: |
+            connected.log
+            smoke-evidence/
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: warn
+          retention-days: 14
