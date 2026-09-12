@@ -101,7 +101,7 @@ jobs:
           exit $code
 
       - name: Fail the run when the build failed
-        if: steps.build.outcome == 'failure'
+        if: steps.build.outputs.exit_code != '0'
         run: |
           echo "::error::Debug build failed - see the workflow artifact for the compiler output."
           exit 1
@@ -111,7 +111,7 @@ jobs:
       # الاختبارات تسبق الآن رفع أي APK (تدقيق CI: لا يُنشر ناتج قبل اجتيازها).
       - name: Unit tests
         id: tests
-        if: steps.build.outcome == 'success' && (github.event_name != 'workflow_dispatch' || inputs.run_tests)
+        if: steps.build.outputs.exit_code == '0' && (github.event_name != 'workflow_dispatch' || inputs.run_tests)
         continue-on-error: true
         run: |
           set +e
@@ -121,7 +121,7 @@ jobs:
           exit $code
 
       - name: Fail the run when the tests failed
-        if: steps.tests.outcome == 'failure'
+        if: steps.tests.outputs.exit_code != '0'
         run: |
           echo "::error::Unit tests failed - see the workflow artifact."
           exit 1
@@ -129,7 +129,7 @@ jobs:
       # بوابة Lint: أي finding بخطورة Fatal يفشل التشغيل (تدقيق CI). الأخطاء الأقل خطورة
       # تبقى في التقرير دون إيقاف التسليم — تشديد البوابة تدريجيًا أفضل من تعطيله.
       - name: Android Lint (Fatal gate)
-        if: steps.build.outcome == 'success'
+        if: steps.build.outputs.exit_code == '0'
         run: |
           set -o pipefail
           ./gradlew :app:lintDebug --no-daemon --console=plain 2>&1 | tee lint.log
@@ -146,7 +146,7 @@ jobs:
           echo "Lint gate passed: no Fatal findings."
 
       - name: Collect APKs
-        if: steps.build.outcome == 'success'
+        if: steps.build.outputs.exit_code == '0'
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk dist/USB-Media-Explorer-debug.apk
@@ -155,7 +155,7 @@ jobs:
       # نسخة debug تبقى artifact للمطورين داخل سجل تشغيل Actions فقط؛ لم تعد تُنشر في
       # الـReleases العامة (تدقيق: التوقف عن توزيع نسخة قابلة للت debugging علنًا).
       - name: Upload debug APK (development artifact)
-        if: steps.build.outcome == 'success'
+        if: steps.build.outputs.exit_code == '0'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.0
         with:
           name: USB-Media-Explorer-debug-apk
@@ -167,7 +167,7 @@ jobs:
       # التشغيل وينشر الأخطاء في المستودع مثل نسخة debug تمامًا.
       - name: Build release APK (signed, R8)
         id: release_build
-        if: steps.build.outcome == 'success' && steps.signing.outputs.has_signing == 'true'
+        if: steps.build.outputs.exit_code == '0' && steps.signing.outputs.has_signing == 'true'
         continue-on-error: true
         env:
           USBMEDIA_STORE_PASSWORD: ${{ secrets.USBMEDIA_STORE_PASSWORD }}
@@ -181,7 +181,7 @@ jobs:
           exit $code
 
       - name: Fail the run when the release build failed
-        if: steps.release_build.outcome == 'failure'
+        if: steps.release_build.outputs.exit_code != '0'
         run: |
           echo "::error::Release build failed - see the workflow artifact for the compiler output."
           exit 1
@@ -191,7 +191,7 @@ jobs:
       # Prove the APK is really signed by the rotated key before anything publishes it,
       # and leave the certificate fingerprints in the log for rotation audits (REL-02).
       - name: Verify release signature (apksigner)
-        if: steps.release_build.outcome == 'success'
+        if: steps.release_build.outputs.exit_code == '0'
         run: |
           set -o pipefail
           APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)"
@@ -203,7 +203,7 @@ jobs:
             app/build/outputs/apk/release/app-release.apk 2>&1 | tee apksigner.log
 
       - name: Upload release APK
-        if: steps.release_build.outcome == 'success'
+        if: steps.release_build.outputs.exit_code == '0'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.0
         with:
           name: USB-Media-Explorer-release-apk
@@ -214,7 +214,7 @@ jobs:
       # الأصول القديمة (غير الموقّعة، ونسخ debug المنشورة سابقًا) تُحذف من الـRelease حتى
       # يبقى ملف واحد موقّع هو التسليم الرسمي.
       - name: Remove legacy release assets
-        if: steps.release_build.outcome == 'success'
+        if: steps.release_build.outputs.exit_code == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -224,7 +224,7 @@ jobs:
       # ينشر الـAPK في Release ثابت اسمه apk-latest حتى يبقى رابط التنزيل واحدًا
       # ولا يحتاج المستخدم للدخول إلى سجل تشغيل Actions في كل مرة.
       - name: Publish APK to the apk-latest release
-        if: steps.release_build.outcome == 'success'
+        if: steps.release_build.outputs.exit_code == '0'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v2.3.0
         with:
           tag_name: apk-latest
@@ -250,7 +250,7 @@ jobs:
           fail_on_unmatched_files: true
 
       - name: Publish GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v') && steps.release_build.outcome == 'success'
+        if: startsWith(github.ref, 'refs/tags/v') && steps.release_build.outputs.exit_code == '0'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v2.3.0
         with:
           files: app/build/outputs/apk/release/app-release.apk
