@@ -732,17 +732,27 @@ private fun PlayerControls(
                         .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Canvas(Modifier.fillMaxWidth().height(4.dp)) {
+                    Canvas(Modifier.fillMaxWidth().height(48.dp)) {
                         val fraction = (sliderValue / duration).coerceIn(0f, 1f)
-                        val radius = CornerRadius(size.height / 2f)
+                        val trackHeight = 4.dp.toPx()
+                        val radius = CornerRadius(trackHeight / 2f)
+                        val trackTop = (size.height - trackHeight) / 2f
                         drawRoundRect(
                             color = Color.White.copy(alpha = 0.35f),
+                            topLeft = androidx.compose.ui.geometry.Offset(0f, trackTop),
+                            size = androidx.compose.ui.geometry.Size(size.width, trackHeight),
                             cornerRadius = radius,
                         )
                         drawRoundRect(
                             color = Color.White,
-                            size = size.copy(width = size.width * fraction),
+                            topLeft = androidx.compose.ui.geometry.Offset(0f, trackTop),
+                            size = androidx.compose.ui.geometry.Size(size.width * fraction, trackHeight),
                             cornerRadius = radius,
+                        )
+                        drawCircle(
+                            color = Color.White,
+                            radius = (if (scrubbing) 10.dp else 8.dp).toPx(),
+                            center = androidx.compose.ui.geometry.Offset(size.width * fraction, size.height / 2f),
                         )
                     }
                     Slider(
@@ -753,14 +763,6 @@ private fun PlayerControls(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
-                        thumbContent = {
-                            Box(
-                                modifier = Modifier
-                                    .size(if (scrubbing) 20.dp else 16.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = if (scrubbing) 1f else 0.92f)),
-                            )
-                        },
                         colors = SliderDefaults.colors(
                             activeTrackColor = Color.Transparent,
                             inactiveTrackColor = Color.Transparent,

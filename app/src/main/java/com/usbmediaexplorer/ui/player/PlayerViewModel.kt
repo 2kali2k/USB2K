@@ -1,6 +1,5 @@
 package com.usbmediaexplorer.ui.player
 
-import android.icu.text.CharsetDetector
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -292,12 +291,19 @@ class PlayerViewModel(
             bytes.hasPrefix(0xEF, 0xBB, 0xBF) -> Charsets.UTF_8
             bytes.hasPrefix(0xFF, 0xFE) -> Charsets.UTF_16LE
             bytes.hasPrefix(0xFE, 0xFF) -> Charsets.UTF_16BE
-            else -> runCatching {
-                Charset.forName(CharsetDetector().setText(bytes).detect()?.name ?: "UTF-8")
-            }.getOrDefault(Charsets.UTF_8)
+            isUtf8(bytes) -> Charsets.UTF_8
+            else -> Charset.forName("windows-1256")
         }
         return bytes.toString(charset).removePrefix("\uFEFF")
     }
+
+    private fun isUtf8(bytes: ByteArray): Boolean = runCatching {
+        Charsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            .decode(java.nio.ByteBuffer.wrap(bytes))
+        true
+    }.getOrDefault(false)
 
     private fun ByteArray.hasPrefix(vararg values: Int): Boolean =
         size >= values.size && values.indices.all { this[it].toInt() and 0xFF == values[it] }
