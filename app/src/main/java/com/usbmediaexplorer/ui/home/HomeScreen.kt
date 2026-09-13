@@ -324,14 +324,6 @@ fun HomeScreen(snackbarHostState: SnackbarHostState) {
             ),
             verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
         ) {
-            item(key = "storage-overview") {
-                StorageOverview(
-                    readyCount = readyVolumes.size,
-                    freeBytes = freeTotal,
-                    onAddStorage = { treePicker.launch(null) },
-                )
-            }
-
             if (state.needsMediaPermission) {
                 item(key = "permission-strip") {
                     PermissionStrip(
