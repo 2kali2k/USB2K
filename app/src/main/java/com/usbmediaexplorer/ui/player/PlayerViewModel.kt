@@ -1,5 +1,6 @@
 package com.usbmediaexplorer.ui.player
 
+import android.icu.text.CharsetDetector
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -31,6 +32,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.nio.charset.Charset
 
 data class TrackOption(
     val id: String,
@@ -209,7 +212,11 @@ class PlayerViewModel(
             loading = false,
         )
 
-        val initialSubs = subtitleNodes.map { sub -> subtitleConfig(sub) }
+        val initialSubs = withContext(Dispatchers.IO) {
+            subtitleNodes.map { sub ->
+                subtitleConfig(normalizeSubtitleUri(sub.uri), sub.name)
+            }
+        }
         subtitleConfigs[startIndex] = initialSubs.toMutableList()
         val mediaItems = playlist.map { item ->
             MediaItem.Builder()
@@ -253,16 +260,47 @@ class PlayerViewModel(
                 .take(MAX_EXTERNAL_SUBTITLES)
         }
 
-    private fun subtitleConfig(sub: DocNode): MediaItem.SubtitleConfiguration {
-        val mime = MediaKind.subtitleMime(sub.extension) ?: "application/x-subrip"
-        val language = guessLanguage(sub.name)
-        return MediaItem.SubtitleConfiguration.Builder(sub.uri)
+    private fun subtitleConfig(uri: Uri, name: String): MediaItem.SubtitleConfiguration {
+        val mime = MediaKind.subtitleMime(name.substringAfterLast('.', "")) ?: "application/x-subrip"
+        val language = guessLanguage(name)
+        return MediaItem.SubtitleConfiguration.Builder(uri)
             .setMimeType(mime)
-            .setLabel(sub.name)
+            .setLabel(name)
             .setLanguage(language)
             .setSelectionFlags(if (language != null) C.SELECTION_FLAG_DEFAULT else 0)
             .build()
     }
+
+    private suspend fun normalizeSubtitleUri(uri: Uri): Uri = withContext(Dispatchers.IO) {
+        val bytes = runCatching {
+            docRepository.openInput(uri)?.use { it.readBytes() }
+        }.getOrNull() ?: return@withContext uri
+        if (bytes.isEmpty()) return@withContext uri
+
+        val key = Integer.toHexString(uri.toString().hashCode()) + "-" + bytes.size
+        val directory = File(context.cacheDir, "subtitles").apply { mkdirs() }
+        val normalized = File(directory, "$key.srt")
+        if (!normalized.isFile) {
+            runCatching { normalized.writeText(decodeSubtitle(bytes), Charsets.UTF_8) }
+                .onFailure { return@withContext uri }
+        }
+        Uri.fromFile(normalized)
+    }
+
+    private fun decodeSubtitle(bytes: ByteArray): String {
+        val charset = when {
+            bytes.hasPrefix(0xEF, 0xBB, 0xBF) -> Charsets.UTF_8
+            bytes.hasPrefix(0xFF, 0xFE) -> Charsets.UTF_16LE
+            bytes.hasPrefix(0xFE, 0xFF) -> Charsets.UTF_16BE
+            else -> runCatching {
+                Charset.forName(CharsetDetector().setText(bytes).detect()?.name ?: "UTF-8")
+            }.getOrDefault(Charsets.UTF_8)
+        }
+        return bytes.toString(charset).removePrefix("\uFEFF")
+    }
+
+    private fun ByteArray.hasPrefix(vararg values: Int): Boolean =
+        size >= values.size && values.indices.all { this[it].toInt() and 0xFF == values[it] }
 
     private fun guessLanguage(name: String): String? {
         val lower = name.lowercase()
@@ -450,19 +488,16 @@ class PlayerViewModel(
     fun addExternalSubtitle(uri: Uri) {
         val index = player.currentMediaItemIndex
         val current = runCatching { player.getMediaItemAt(index) }.getOrNull() ?: return
-        val mime = MediaKind.subtitleMime(uri.toString().substringAfterLast('.', "srt"))
-            ?: "application/x-subrip"
-        val config = MediaItem.SubtitleConfiguration.Builder(uri)
-            .setMimeType(mime)
-            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-            .build()
-        val configs = subtitleConfigs.getOrPut(index) { mutableListOf() }
-        configs += config
-        val updated = current.buildUpon()
-            .setSubtitleConfigurations(configs)
-            .build()
-        player.replaceMediaItem(index, updated)
         viewModelScope.launch {
+            val normalizedUri = normalizeSubtitleUri(uri)
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "subtitle"
+            val config = subtitleConfig(normalizedUri, name)
+            val configs = subtitleConfigs.getOrPut(index) { mutableListOf() }
+            configs += config
+            val updated = current.buildUpon()
+                .setSubtitleConfigurations(configs)
+                .build()
+            player.replaceMediaItem(index, updated)
             delay(400)
             publishTrackOptions()
         }

@@ -732,7 +732,7 @@ private fun PlayerControls(
                         .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Canvas(Modifier.fillMaxWidth().height(2.dp)) {
+                    Canvas(Modifier.fillMaxWidth().height(4.dp)) {
                         val fraction = (sliderValue / duration).coerceIn(0f, 1f)
                         val radius = CornerRadius(size.height / 2f)
                         drawRoundRect(
@@ -750,7 +750,17 @@ private fun PlayerControls(
                         onValueChange = onScrubChange,
                         onValueChangeFinished = { onScrubEnd(if (scrubbing) scrubPosition else positionMs.toFloat()) },
                         valueRange = 0f..duration,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        thumbContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(if (scrubbing) 20.dp else 16.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = if (scrubbing) 1f else 0.92f)),
+                            )
+                        },
                         colors = SliderDefaults.colors(
                             activeTrackColor = Color.Transparent,
                             inactiveTrackColor = Color.Transparent,

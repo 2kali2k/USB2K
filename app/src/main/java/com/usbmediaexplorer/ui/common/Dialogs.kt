@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -315,7 +316,11 @@ fun OptionDialog(
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 10.dp),
+                                .padding(vertical = 10.dp)
+                                .clickable {
+                                    onSelect(index)
+                                    onDismiss()
+                                },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -328,9 +333,6 @@ fun OptionDialog(
                                 },
                                 modifier = Modifier.weight(1f),
                             )
-                            TextButton(onClick = { onSelect(index) }) {
-                                Text(stringResource(R.string.action_apply))
-                            }
                         }
                     }
                 }
